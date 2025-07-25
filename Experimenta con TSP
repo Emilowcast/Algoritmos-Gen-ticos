@@ -1,0 +1,114 @@
+# Instalar dependencias
+!pip install numpy matplotlib --quiet
+
+import numpy as np
+import random
+import matplotlib.pyplot as plt
+
+# 1. Definir coordenadas de 10 ciudades
+num_cities = 10
+coords = np.random.rand(num_cities, 2) * 100  # coordenadas aleatorias en [0,100)
+
+# 2. Función de distancia euclidiana
+def distance(a, b):
+    return np.linalg.norm(a - b)
+
+# 3. Fitness: inverso de la distancia total de la ruta
+def fitness(route):
+    dist = 0
+    for i in range(len(route)):
+        city_a = coords[route[i]]
+        city_b = coords[route[(i+1) % len(route)]]
+        dist += distance(city_a, city_b)
+    return 1.0 / dist
+
+# 4. Crear población inicial (permutaciones aleatorias)
+def create_population(pop_size):
+    return [random.sample(range(num_cities), num_cities) for _ in range(pop_size)]
+
+# 5. Selección por torneo
+def tournament_selection(pop, fitnesses, k=3):
+    selected = random.sample(list(zip(pop, fitnesses)), k)
+    selected.sort(key=lambda x: x[1], reverse=True)
+    return selected[0][0][:]
+
+# 6. Crossover (Order Crossover - OX)
+def crossover(parent1, parent2):
+    size = len(parent1)
+    a, b = sorted(random.sample(range(size), 2))
+    child = [-1]*size
+    # copiar segmento de parent1
+    child[a:b+1] = parent1[a:b+1]
+    # rellenar el resto con genes de parent2 en orden
+    p2_idx = 0
+    for i in range(size):
+        if child[i] == -1:
+            while parent2[p2_idx] in child:
+                p2_idx += 1
+            child[i] = parent2[p2_idx]
+    return child
+
+# 7. Mutación (swap de dos genes)
+def mutate(route, mutation_rate=0.01):
+    for i in range(len(route)):
+        if random.random() < mutation_rate:
+            j = random.randrange(len(route))
+            route[i], route[j] = route[j], route[i]
+
+# 8. Algoritmo Genético
+def run_ga(pop_size=50, generations=100, mutation_rate=0.02):
+    # inicialización
+    population = create_population(pop_size)
+    best_route = None
+    best_fit = -1
+    
+    history = []
+    
+    for gen in range(generations):
+        # calcular fitness de toda la población
+        fits = [fitness(r) for r in population]
+        # registrar mejor
+        max_idx = np.argmax(fits)
+        if fits[max_idx] > best_fit:
+            best_fit = fits[max_idx]
+            best_route = population[max_idx][:]
+        history.append(1.0/best_fit)
+        
+        # nueva población (elitismo: conservar el mejor)
+        new_pop = [best_route[:]]
+        while len(new_pop) < pop_size:
+            p1 = tournament_selection(population, fits)
+            p2 = tournament_selection(population, fits)
+            child = crossover(p1, p2)
+            mutate(child, mutation_rate)
+            new_pop.append(child)
+        population = new_pop
+    
+    return best_route, history
+
+# 9. Ejecutar el GA
+best_route, history = run_ga(pop_size=100, generations=200, mutation_rate=0.05)
+
+# 10. Mostrar resultados
+print("Mejor ruta encontrada:", best_route)
+print(f"Distancia total: {1.0/fitness(best_route):.2f}")
+
+# 11. Graficar evolución del fitness (distancia total)
+plt.figure(figsize=(8,4))
+plt.plot(history)
+plt.title("Evolución de la distancia de la mejor ruta")
+plt.xlabel("Generación")
+plt.ylabel("Distancia total")
+plt.grid(True)
+plt.show()
+
+# 12. Graficar la ruta óptima
+route_coords = coords[best_route + [best_route[0]]]  # cerrar el ciclo
+plt.figure(figsize=(6,6))
+plt.plot(route_coords[:,0], route_coords[:,1], '-o')
+for i, (x,y) in enumerate(coords):
+    plt.text(x+1, y+1, str(i), fontsize=12)
+plt.title("Mejor ruta TSP")
+plt.xlabel("X")
+plt.ylabel("Y")
+plt.show()
